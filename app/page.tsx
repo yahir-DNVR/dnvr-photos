@@ -62,7 +62,7 @@ export default function Home() {
       return;
     }
 
-    alert("Account created. Check your email.");
+    alert("Account created.");
   }
 
   async function signIn() {
@@ -192,12 +192,18 @@ export default function Home() {
     setUploading(false);
   }
 
-  async function deletePhoto(id: string) {
-    const confirmDelete = confirm("Delete this photo?");
+  async function deletePhoto(id: string, title: string) {
+    const typed = prompt(`Type DELETE to remove:\n\n${title}`);
 
-    if (!confirmDelete) return;
+    if (typed !== "DELETE") {
+      alert("Delete cancelled");
+      return;
+    }
 
-    const { error } = await supabase.from("photos").delete().eq("id", id);
+    const { error } = await supabase
+      .from("photos")
+      .delete()
+      .eq("id", id);
 
     if (error) {
       alert(error.message);
@@ -205,6 +211,23 @@ export default function Home() {
     }
 
     await loadPhotos();
+  }
+
+  async function downloadPhoto(url: string, filename: string) {
+    const response = await fetch(url);
+    const blob = await response.blob();
+
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename || "photo";
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(blobUrl);
   }
 
   return (
@@ -351,51 +374,17 @@ export default function Home() {
               </div>
             )}
 
-            <input
-              className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-              placeholder="Caption optional"
-              value={form.caption}
-              onChange={(e) => setForm({ ...form, caption: e.target.value })}
-            />
-
-            <input
-              className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-              placeholder="Photographer optional"
-              value={form.photographer}
-              onChange={(e) =>
-                setForm({ ...form, photographer: e.target.value })
-              }
-            />
-
-            <input
-              className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-              placeholder="Location optional"
-              value={form.location}
-              onChange={(e) =>
-                setForm({ ...form, location: e.target.value })
-              }
-            />
-
-            <input
-              className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-              placeholder="Event optional"
-              value={form.event}
-              onChange={(e) => setForm({ ...form, event: e.target.value })}
-            />
-
-            <input
-              className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-              placeholder="Team optional"
-              value={form.team}
-              onChange={(e) => setForm({ ...form, team: e.target.value })}
-            />
-
-            <input
-              className="mb-4 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-              placeholder="Person optional"
-              value={form.person}
-              onChange={(e) => setForm({ ...form, person: e.target.value })}
-            />
+            {["caption", "photographer", "location", "event", "team", "person"].map((field) => (
+              <input
+                key={field}
+                className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
+                placeholder={`${field} optional`}
+                value={(form as any)[field]}
+                onChange={(e) =>
+                  setForm({ ...form, [field]: e.target.value })
+                }
+              />
+            ))}
 
             <button
               onClick={uploadPhotos}
@@ -415,12 +404,12 @@ export default function Home() {
             >
               <button
                 onClick={() => setSelectedPhoto(photo)}
-                className="w-full"
+                className="w-full overflow-hidden"
               >
                 <img
                   src={photo.image_url}
                   alt={photo.title}
-                  className="h-48 w-full object-cover transition hover:scale-105"
+                  className="h-48 w-full object-cover transition duration-300 hover:scale-105"
                 />
               </button>
 
@@ -436,18 +425,20 @@ export default function Home() {
                 </p>
 
                 <div className="mt-3 flex gap-2">
-                  <a
-                    href={photo.image_url}
-                    download
-                    target="_blank"
+                  <button
+                    onClick={() =>
+                      downloadPhoto(photo.image_url, photo.title)
+                    }
                     className="rounded bg-white px-3 py-1 text-xs font-semibold text-black"
                   >
                     Download
-                  </a>
+                  </button>
 
                   {session && (
                     <button
-                      onClick={() => deletePhoto(photo.id)}
+                      onClick={() =>
+                        deletePhoto(photo.id, photo.title)
+                      }
                       className="rounded bg-red-500 px-3 py-1 text-xs font-semibold text-black"
                     >
                       Delete
@@ -494,14 +485,17 @@ export default function Home() {
               )}
 
               <div className="mt-4 flex flex-wrap gap-3">
-                <a
-                  href={selectedPhoto.image_url}
-                  target="_blank"
-                  download
+                <button
+                  onClick={() =>
+                    downloadPhoto(
+                      selectedPhoto.image_url,
+                      selectedPhoto.title
+                    )
+                  }
                   className="rounded-lg bg-white px-4 py-2 font-semibold text-black"
                 >
                   Download Photo
-                </a>
+                </button>
               </div>
             </div>
           </div>
