@@ -28,6 +28,16 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [session, setSession] = useState<any>(null);
 
+  const adminEmails = [
+    "nicolas@thednvr.com",
+    "rg@thednvr.com",
+    "yahir@thednvr.com",
+  ];
+
+  const isAdmin = adminEmails.includes(
+    session?.user?.email || ""
+  );
+
   const [form, setForm] = useState({
     caption: "",
     photographer: "",
@@ -52,17 +62,7 @@ export default function Home() {
   }, []);
 
   async function signUp() {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    alert("Account created.");
+    alert("Public signups are disabled.");
   }
 
   async function signIn() {
@@ -267,13 +267,6 @@ export default function Home() {
               >
                 Login
               </button>
-
-              <button
-                onClick={signUp}
-                className="rounded-lg bg-green-500 px-4 py-2 font-semibold text-black"
-              >
-                Sign Up
-              </button>
             </div>
           ) : (
             <div className="flex items-center gap-3">
@@ -434,7 +427,7 @@ export default function Home() {
                     Download
                   </button>
 
-                  {session && (
+                  {isAdmin && (
                     <button
                       onClick={() =>
                         deletePhoto(photo.id, photo.title)
