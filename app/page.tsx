@@ -22,6 +22,11 @@ export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [session, setSession] = useState<any>(null);
 
   const [form, setForm] = useState({
     caption: "",
@@ -31,6 +36,68 @@ export default function Home() {
     team: "",
     person: "",
   });
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function signUp() {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    alert("Account created. Check your email.");
+  }
+
+  async function signIn() {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
+
+  async function loadPhotos() {
+    const { data, error } = await supabase
+      .from("photos")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setPhotos(data || []);
+  }
+
+  useEffect(() => {
+    loadPhotos();
+  }, []);
 
   const filteredPhotos = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -53,24 +120,6 @@ export default function Home() {
     );
   }, [photos, search]);
 
-  async function loadPhotos() {
-    const { data, error } = await supabase
-      .from("photos")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    setPhotos(data || []);
-  }
-
-  useEffect(() => {
-    loadPhotos();
-  }, []);
-
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const imageFiles = acceptedFiles.filter((file) =>
       file.type.startsWith("image/")
@@ -86,8 +135,13 @@ export default function Home() {
   });
 
   async function uploadPhotos() {
+    if (!session) {
+      alert("You must be logged in");
+      return;
+    }
+
     if (files.length === 0) {
-      alert("Choose at least one photo first");
+      alert("Choose photos first");
       return;
     }
 
@@ -130,41 +184,102 @@ export default function Home() {
 
     alert("Photos uploaded!");
 
-    setShowUpload(false);
     setFiles([]);
-    setForm({
-      caption: "",
-      photographer: "",
-      location: "",
-      event: "",
-      team: "",
-      person: "",
-    });
+    setShowUpload(false);
 
     await loadPhotos();
+
     setUploading(false);
+  }
+
+  async function deletePhoto(id: string) {
+    const confirmDelete = confirm("Delete this photo?");
+
+    if (!confirmDelete) return;
+
+    const { error } = await supabase.from("photos").delete().eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadPhotos();
   }
 
   return (
     <main className="min-h-screen bg-black text-white">
-      <section className="border-b border-neutral-800 p-8">
-        <h1 className="text-4xl font-bold">DNVR Photos</h1>
-        <p className="mt-2 text-neutral-400">
-          Search, upload, tag, and download community photos.
-        </p>
+      <section className="border-b border-neutral-800 p-4 md:p-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold md:text-4xl">
+              DNVR Photos
+            </h1>
+
+            <p className="mt-2 text-sm text-neutral-400 md:text-base">
+              Search, upload, tag, and download community photos.
+            </p>
+          </div>
+
+          {!session ? (
+            <div className="flex flex-col gap-2 md:flex-row">
+              <input
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2"
+              />
+
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2"
+              />
+
+              <button
+                onClick={signIn}
+                className="rounded-lg bg-white px-4 py-2 font-semibold text-black"
+              >
+                Login
+              </button>
+
+              <button
+                onClick={signUp}
+                className="rounded-lg bg-green-500 px-4 py-2 font-semibold text-black"
+              >
+                Sign Up
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-neutral-400">
+                {session.user.email}
+              </p>
+
+              <button
+                onClick={signOut}
+                className="rounded-lg bg-red-500 px-4 py-2 font-semibold text-black"
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="mt-6 flex gap-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
-            placeholder="Search by team, person, location, event..."
+            placeholder="Search by team, player, event, location..."
           />
 
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="rounded-lg bg-neutral-800 px-5 py-3 font-semibold text-white"
+              className="rounded-lg bg-neutral-800 px-4 py-3"
             >
               Clear
             </button>
@@ -172,18 +287,22 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="p-8">
+      <section className="p-4 md:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-semibold">
-            {search ? `Search Results (${filteredPhotos.length})` : "Latest Photos"}
+            {search
+              ? `Search Results (${filteredPhotos.length})`
+              : "Latest Photos"}
           </h2>
 
-          <button
-            onClick={() => setShowUpload(true)}
-            className="rounded-lg bg-green-500 px-4 py-2 font-semibold text-black"
-          >
-            Upload Photos
-          </button>
+          {session && (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="rounded-lg bg-green-500 px-4 py-2 font-semibold text-black"
+            >
+              Upload
+            </button>
+          )}
         </div>
 
         {showUpload && (
@@ -199,11 +318,13 @@ export default function Home() {
               }`}
             >
               <input {...getInputProps()} />
+
               <p className="font-semibold">
                 Drag photos here or click to browse
               </p>
+
               <p className="mt-2 text-sm text-neutral-400">
-                Upload up to 10 images at a time
+                Upload up to 10 images
               </p>
             </div>
 
@@ -212,16 +333,19 @@ export default function Home() {
                 {files.map((file, index) => (
                   <div
                     key={`${file.name}-${index}`}
-                    className="rounded-lg border border-neutral-800 bg-black p-2"
+                    className="overflow-hidden rounded-lg border border-neutral-800"
                   >
                     <img
                       src={URL.createObjectURL(file)}
                       alt={file.name}
-                      className="h-24 w-full rounded object-cover"
+                      className="h-24 w-full object-cover"
                     />
-                    <p className="mt-2 truncate text-xs text-neutral-400">
-                      {file.name}
-                    </p>
+
+                    <div className="p-2">
+                      <p className="truncate text-xs text-neutral-400">
+                        {file.name}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -247,7 +371,9 @@ export default function Home() {
               className="mb-3 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3"
               placeholder="Location optional"
               value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, location: e.target.value })
+              }
             />
 
             <input
@@ -274,56 +400,113 @@ export default function Home() {
             <button
               onClick={uploadPhotos}
               disabled={uploading}
-              className="rounded-lg bg-white px-5 py-3 font-semibold text-black disabled:opacity-50"
+              className="rounded-lg bg-white px-5 py-3 font-semibold text-black"
             >
-              {uploading ? "Uploading..." : `Upload ${files.length || ""} Photos`}
+              {uploading ? "Uploading..." : "Upload Photos"}
             </button>
           </div>
         )}
 
-        {filteredPhotos.length === 0 ? (
-          <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-10 text-center text-neutral-400">
-            No photos found.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {filteredPhotos.map((photo) => (
-              <div
-                key={photo.id}
-                className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950"
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {filteredPhotos.map((photo) => (
+            <div
+              key={photo.id}
+              className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950"
+            >
+              <button
+                onClick={() => setSelectedPhoto(photo)}
+                className="w-full"
               >
                 <img
                   src={photo.image_url}
                   alt={photo.title}
-                  className="h-56 w-full object-cover"
+                  className="h-48 w-full object-cover transition hover:scale-105"
                 />
+              </button>
 
-                <div className="p-4">
-                  <p className="font-semibold">{photo.title}</p>
+              <div className="p-3">
+                <p className="truncate font-semibold">
+                  {photo.title}
+                </p>
 
-                  <p className="text-sm text-neutral-400">
-                    {[photo.team, photo.person, photo.location]
-                      .filter(Boolean)
-                      .join(" • ")}
-                  </p>
+                <p className="mt-1 text-xs text-neutral-400">
+                  {[photo.team, photo.person, photo.location]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
 
-                  {photo.photographer && (
-                    <p className="mt-2 text-xs text-neutral-500">
-                      Photographer: {photo.photographer}
-                    </p>
-                  )}
+                <div className="mt-3 flex gap-2">
+                  <a
+                    href={photo.image_url}
+                    download
+                    target="_blank"
+                    className="rounded bg-white px-3 py-1 text-xs font-semibold text-black"
+                  >
+                    Download
+                  </a>
 
-                  {photo.event && (
-                    <p className="text-xs text-neutral-500">
-                      Event: {photo.event}
-                    </p>
+                  {session && (
+                    <button
+                      onClick={() => deletePhoto(photo.id)}
+                      className="rounded bg-red-500 px-3 py-1 text-xs font-semibold text-black"
+                    >
+                      Delete
+                    </button>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </section>
+
+      {selectedPhoto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4">
+          <button
+            onClick={() => setSelectedPhoto(null)}
+            className="absolute right-4 top-4 rounded bg-white px-4 py-2 font-semibold text-black"
+          >
+            Close
+          </button>
+
+          <div className="max-h-[95vh] max-w-7xl overflow-auto">
+            <img
+              src={selectedPhoto.image_url}
+              alt={selectedPhoto.title}
+              className="max-h-[80vh] w-auto rounded-xl"
+            />
+
+            <div className="mt-4 rounded-xl bg-neutral-950 p-4">
+              <h2 className="text-2xl font-bold">
+                {selectedPhoto.title}
+              </h2>
+
+              <p className="mt-2 text-neutral-400">
+                {[selectedPhoto.team,
+                  selectedPhoto.person,
+                  selectedPhoto.location]
+                  .filter(Boolean)
+                  .join(" • ")}
+              </p>
+
+              {selectedPhoto.caption && (
+                <p className="mt-4">{selectedPhoto.caption}</p>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <a
+                  href={selectedPhoto.image_url}
+                  target="_blank"
+                  download
+                  className="rounded-lg bg-white px-4 py-2 font-semibold text-black"
+                >
+                  Download Photo
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
